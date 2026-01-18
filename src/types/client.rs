@@ -2,7 +2,9 @@ use rust_decimal::Decimal;
 
 use crate::types::common::ClientId;
 
+#[derive(Debug, serde::Serialize)]
 pub struct Client {
+    #[serde(rename = "client")]
     pub id: ClientId,
     pub available: Decimal,
     pub held: Decimal,

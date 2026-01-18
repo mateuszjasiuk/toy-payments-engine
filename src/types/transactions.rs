@@ -9,6 +9,9 @@ pub struct DepositTx {
     pub amount: Decimal,
 }
 
+// We allow the dead code as tx_id is never used in this impl.
+// We keep it for consistecy though.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct WithdrawalTx {
     pub client_id: ClientId,
@@ -44,7 +47,6 @@ pub enum Tx {
 }
 
 impl TryFrom<CsvRow> for Tx {
-    // TODO: improve error
     type Error = ();
 
     fn try_from(value: CsvRow) -> Result<Self, Self::Error> {

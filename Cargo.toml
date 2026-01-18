@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 csv = "1.4.0"
+proptest = "1.9.0"
 rust_decimal = "1.40.0"
 rust_decimal_macros = "1.40.0"
 serde = { version = "1.0.228", features = ["derive"] }
+tempfile = "3.24.0"
