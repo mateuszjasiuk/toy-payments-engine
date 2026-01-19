@@ -47,6 +47,7 @@ pub enum Tx {
 }
 
 impl TryFrom<CsvRow> for Tx {
+    // Simple error type as we are ignoring malformed rows anyway
     type Error = ();
 
     fn try_from(value: CsvRow) -> Result<Self, Self::Error> {

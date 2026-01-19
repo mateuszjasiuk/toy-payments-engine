@@ -58,12 +58,10 @@ impl Engine {
             .or_insert(Client::new(deposit_tx.client_id));
 
         if client.locked {
-            return;
+            return; // Account is locked
         }
 
-        // Update the available
         client.available += deposit_tx.amount;
-        // Update the total
         client.total += deposit_tx.amount;
 
         // Spec claims that the ids are unique, but just to be sure
@@ -78,7 +76,7 @@ impl Engine {
         };
 
         if client.locked {
-            return;
+            return; // Account is locked
         }
 
         if client.available < withdrawal_tx.amount {
@@ -91,44 +89,42 @@ impl Engine {
 
     fn process_dispute(&mut self, dispute_tx: DisputeTx) {
         let Some(client) = self.clients.get_mut(&dispute_tx.client_id) else {
-            return;
+            return; // Client doesn't exist
         };
 
         let Some((deposit_tx, deposit_status)) = self.deposits.get_mut(&dispute_tx.tx_id) else {
-            return;
+            return; // Corresponding deposit doesn't exist
         };
 
-        // Verify client matches
         if dispute_tx.client_id != deposit_tx.client_id {
-            return;
+            return; // Dispute client doesn't match deposit client
         }
 
-        // Only dispute if in Normal status
         if *deposit_status != DepositStatus::Normal {
-            return;
+            return; // Deposit is not in a state that can be disputed
         }
 
-        // All checks passed, process the dispute
         *deposit_status = DepositStatus::UnderDispute;
+        // Available can go negative if funds were already withdrawn (fraud scenario)
         client.available -= deposit_tx.amount;
         client.held += deposit_tx.amount;
     }
 
     fn process_resolve(&mut self, resolve_tx: ResolveTx) {
         let Some(client) = self.clients.get_mut(&resolve_tx.client_id) else {
-            return;
+            return; // Client doesn't exist
         };
 
         let Some((deposit_tx, deposit_status)) = self.deposits.get_mut(&resolve_tx.tx_id) else {
-            return;
+            return; // Corresponding deposit doesn't exist
         };
 
         if resolve_tx.client_id != deposit_tx.client_id {
-            return;
+            return; // Dispute client doesn't match deposit client
         }
 
         if *deposit_status != DepositStatus::UnderDispute {
-            return;
+            return; // Deposit is not in a state that can be resolved
         }
 
         *deposit_status = DepositStatus::Resolved;
@@ -138,19 +134,19 @@ impl Engine {
 
     fn process_chargeback(&mut self, chargeback_tx: ChargebackTx) {
         let Some(client) = self.clients.get_mut(&chargeback_tx.client_id) else {
-            return;
+            return; // Client doesn't exist
         };
 
         let Some((deposit_tx, deposit_status)) = self.deposits.get_mut(&chargeback_tx.tx_id) else {
-            return;
+            return; // Corresponding deposit doesn't exist
         };
 
         if chargeback_tx.client_id != deposit_tx.client_id {
-            return;
+            return; // Dispute client doesn't match deposit client
         }
 
         if *deposit_status != DepositStatus::UnderDispute {
-            return;
+            return; // Deposit is not in a state that can be charged back
         }
 
         *deposit_status = DepositStatus::ChargedBack;
@@ -302,9 +298,8 @@ mod tests {
         assert_eq!(client.available, dec!(10.0));
         assert_eq!(client.total, dec!(10.0));
         assert!(engine.deposits.contains_key(&1));
-        // Check if dispute did not add new entry
         assert!(!engine.deposits.contains_key(&2));
-        // Check if dispute did not update the status of existing deposit
+
         let (_, status) = engine.deposits.get(&1).unwrap();
         assert_eq!(*status, DepositStatus::Normal);
     }
@@ -327,9 +322,9 @@ mod tests {
         engine.process_deposit(deposit);
         engine.process_dispute(dispute);
 
-        // Check if dispute updated the status
         let (_, status) = engine.deposits.get(&1).unwrap();
         assert_eq!(*status, DepositStatus::UnderDispute);
+
         let client = engine.clients.get(&1).unwrap();
         assert_eq!(client.available, dec!(0));
         assert_eq!(client.total, dec!(10.0));
@@ -360,7 +355,6 @@ mod tests {
         engine.process_dispute(dispute1);
         engine.process_dispute(dispute2);
 
-        // Check if second despute was not applied
         let (_, status) = engine.deposits.get(&1).unwrap();
         assert_eq!(*status, DepositStatus::UnderDispute);
         let client = engine.clients.get(&1).unwrap();
@@ -880,7 +874,6 @@ mod tests {
     fn test_process_deposit_rejected_after_chargeback_locks_account() {
         let mut engine = Engine::new();
 
-        // Client 2 scenario from large test
         let deposit1 = DepositTx {
             client_id: 2,
             tx_id: 2,
@@ -949,6 +942,8 @@ mod tests {
 
     #[test]
     fn test_end_to_end_csv_processing() {
+        // Note: This duplicates CSV processing logic from main.rs
+        // Could be extracted to Engine::process_csv() to reduce duplication
         const TEST_CSV: &str = "\
 type,client,tx,amount
 deposit,1,1,100.0
@@ -962,12 +957,10 @@ dispute,2,2
 chargeback,2,2
 deposit,2,6,50.0";
 
-        // Write to temp file
         let mut input_file = NamedTempFile::new().unwrap();
         write!(input_file, "{}", TEST_CSV).unwrap();
         input_file.flush().unwrap();
 
-        // Process the file
         let mut rdr = csv::ReaderBuilder::new()
             .trim(csv::Trim::All)
             .flexible(true)
@@ -990,17 +983,16 @@ deposit,2,6,50.0";
             engine.process_tx(tx);
         }
 
-        // Verify final state
         let client1 = engine.clients().get(&1).unwrap();
-        assert_eq!(client1.available, dec!(120.0)); // 100 + 50 - 30
+        assert_eq!(client1.available, dec!(120.0));
         assert_eq!(client1.held, dec!(0));
         assert_eq!(client1.total, dec!(120.0));
         assert!(!client1.locked);
 
         let client2 = engine.clients().get(&2).unwrap();
-        assert_eq!(client2.available, dec!(100.0)); // 200 + 100 - 200 (chargeback)
+        assert_eq!(client2.available, dec!(100.0));
         assert_eq!(client2.held, dec!(0));
-        assert_eq!(client2.total, dec!(100.0)); // 300 - 200 (chargeback)
+        assert_eq!(client2.total, dec!(100.0));
         assert!(client2.locked);
     }
 }
@@ -1011,10 +1003,8 @@ mod property_tests {
     use proptest::prelude::*;
     use rust_decimal::Decimal;
 
-    // Strategy for generating valid transactions
     fn arb_transaction() -> impl Strategy<Value = Tx> {
         prop_oneof![
-            // Generate deposits
             (1u16..100, 1u32..10000, 0i64..100000).prop_map(|(client, tx, amount)| {
                 Tx::Deposit(DepositTx {
                     client_id: client,
@@ -1022,7 +1012,6 @@ mod property_tests {
                     amount: Decimal::new(amount, 4), // amount/10000 for 4 decimals
                 })
             }),
-            // Generate withdrawals
             (1u16..100, 1u32..10000, 0i64..100000).prop_map(|(client, tx, amount)| {
                 Tx::Withdrawal(WithdrawalTx {
                     client_id: client,
@@ -1030,21 +1019,18 @@ mod property_tests {
                     amount: Decimal::new(amount, 4),
                 })
             }),
-            // Generate disputes
             (1u16..100, 1u32..10000).prop_map(|(client, tx)| {
                 Tx::Dispute(DisputeTx {
                     client_id: client,
                     tx_id: tx,
                 })
             }),
-            // Generate resolves
             (1u16..100, 1u32..10000).prop_map(|(client, tx)| {
                 Tx::Resolve(ResolveTx {
                     client_id: client,
                     tx_id: tx,
                 })
             }),
-            // Generate chargebacks
             (1u16..100, 1u32..10000).prop_map(|(client, tx)| {
                 Tx::Chargeback(ChargebackTx {
                     client_id: client,
@@ -1066,10 +1052,7 @@ mod property_tests {
 
             // Invariant checks
             for (_, client) in engine.clients.iter() {
-                // Total should always equal available + held
                 prop_assert_eq!(client.total, client.available + client.held);
-
-                // Held should never be negative
                 prop_assert!(client.held >= Decimal::ZERO);
             }
         }
@@ -1083,14 +1066,11 @@ mod property_tests {
 
                 // After every transaction, check invariants
                 for (_, client) in engine.clients.iter() {
-                    // available + held = total
                     prop_assert_eq!(
                         client.available + client.held,
                         client.total,
                         "Invariant violated: available + held != total"
                     );
-
-                    // held >= 0
                     prop_assert!(
                         client.held >= Decimal::ZERO,
                         "Invariant violated: held is negative"

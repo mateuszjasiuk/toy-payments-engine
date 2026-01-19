@@ -1,4 +1,4 @@
-use rust_decimal::Decimal;
+use rust_decimal::{Decimal, prelude::Zero};
 
 use crate::types::common::ClientId;
 
@@ -16,9 +16,9 @@ impl Client {
     pub fn new(id: ClientId) -> Self {
         Client {
             id,
-            available: Decimal::new(0, 0),
-            held: Decimal::new(0, 0),
-            total: Decimal::new(0, 0),
+            available: Decimal::zero(),
+            held: Decimal::zero(),
+            total: Decimal::zero(),
             locked: false,
         }
     }

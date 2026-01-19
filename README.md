@@ -44,7 +44,7 @@ Supported transaction types:
 
 CSV with columns: `client`, `available`, `held`, `total`, `locked`
 
-## Design Decisions Documentation
+## Design Decisions
 
 ### **Decision:** Only deposit transactions can be disputed. Withdrawal transactions cannot be disputed.
 
@@ -121,7 +121,7 @@ CSV with columns: `client`, `available`, `held`, `total`, `locked`
 **Reasoning:**
 
 - `rust_decimal` supports values up to ~10^28
-- Realistic transaction volumes should be lower
+- Realistic transaction amounts should be lower
 
 ### Decision: Use in-memory HashMaps instead of SQLite or embedded database.
 
