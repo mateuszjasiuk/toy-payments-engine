@@ -1,3 +1,49 @@
+# Toy Payments Engine
+
+A simple transaction processing engine that handles deposits, withdrawals, disputes, and chargebacks for clients.
+
+## Usage
+
+Build:
+
+```bash
+cargo build --release
+```
+
+Run:
+
+```bash
+cargo run -- transactions.csv > accounts.csv
+```
+
+Test:
+
+```bash
+cargo test
+```
+
+**Unit tests** - For specific edge cases (disputes, chargebacks, locked accounts, negative balances)
+
+**Property tests** - To verify invariants (`available + held = total`, `held >= 0`) across random transactions using `proptest`
+
+**E2E test** - Full CSV processing scenario with known input/output
+
+## Input Format
+
+CSV with columns: `type`, `client`, `tx`, `amount`
+
+Supported transaction types:
+
+- `deposit` - Credit to account
+- `withdrawal` - Debit from account
+- `dispute` - Challenge a transaction
+- `resolve` - Resolve a dispute
+- `chargeback` - Reverse a transaction and lock account
+
+## Output Format
+
+CSV with columns: `client`, `available`, `held`, `total`, `locked`
+
 ## Design Decisions Documentation
 
 ### **Decision:** Only deposit transactions can be disputed. Withdrawal transactions cannot be disputed.
